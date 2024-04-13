@@ -199,21 +199,29 @@ class YjsConsumer(AsyncWebsocketConsumer):
         if bytes_data is None:
             return
 
-        await self.group_send_message(bytes_data)
-
         if bytes_data[0] != YMessageType.SYNC:
+            await self.group_send_message(bytes_data)
+
             return
 
         # If it's an update message, apply it to the storage document
-        if self.room_storage and bytes_data[1] == YSyncMessageType.SYNC_UPDATE:
+        if self.room_storage and bytes_data[1] in (
+            YSyncMessageType.SYNC_STEP2,
+            YSyncMessageType.SYNC_UPDATE,
+        ):
             update = read_message(bytes_data[2:])
 
             if update != EMPTY_UPDATE:
                 await self.room_storage.update_document(update)
+        else:
+            await process_sync_message(
+                bytes_data[1:],
+                self.ydoc,
+                self._websocket_shim,
+                logger,
+            )
 
-            return
-
-        await process_sync_message(bytes_data[1:], self.ydoc, self._websocket_shim, logger)
+        await self.group_send_message(bytes_data)
 
     class WrappedMessage(TypedDict):
         """A wrapped message to send to the client."""
