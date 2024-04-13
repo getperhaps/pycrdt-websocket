@@ -44,13 +44,20 @@ class BaseYRoomStorage(ABC):
             return await YDocSnapshot.objects.aget_snapshot(self.room_name)
 
         async def save_snapshot(self):
-            current_snapshot = await self.redis.get(self.redis_key)
-            if not current_snapshot:
-                return
-            await YDocSnapshot.objects.asave_snapshot(
-                self.room_name,
-                current_snapshot,
-            )
+            async with self.redis.lock(self.redis_key + ":lock", timeout=5):
+                current_document = await self._get_document(
+                    delete_updates_after_retrieve=True,
+                )
+
+                current_snapshot = current_document.get_update()
+
+                if not current_snapshot:
+                    return
+
+                await YDocUpdate.objects.asave_snapshot(
+                    self.room_name,
+                    current_snapshot,
+                )
     ```
     """
 
